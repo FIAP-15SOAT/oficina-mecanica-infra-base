@@ -5,5 +5,5 @@ locals {
 
   vpc_name         = "vpc-${var.project_name}"
   eks_cluster_name = "eks-${var.project_name}"
-  eks_subnet_name  = "subnet-eks-${var.project_name}"
+  subnet_name      = "subnet-${var.project_name}"
 }

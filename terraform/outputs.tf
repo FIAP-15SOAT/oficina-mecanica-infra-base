@@ -10,10 +10,10 @@ output "vpc_cidr" {
 
 output "private_subnet_ids" {
   description = "Private subnet IDs"
-  value       = aws_subnet.subnet_eks_private[*].id
+  value       = aws_subnet.subnet_oficina_mecanica_private[*].id
 }
 
 output "public_subnet_ids" {
   description = "Public subnet IDs"
-  value       = aws_subnet.subnet_eks_public[*].id
+  value       = aws_subnet.subnet_oficina_mecanica_public[*].id
 }
