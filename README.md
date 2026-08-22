@@ -2,18 +2,17 @@
 
 # ☁️ Oficina Mecânica — Infraestrutura Base AWS (IaC)
 
-**Provisionamento automatizado da infraestrutura base na AWS com Terraform para a solução Oficina Mecânica.**
+**Provisionamento automatizado da fundação de rede e infraestrutura na AWS com Terraform para a solução Oficina Mecânica.**
 
 ![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.11.0-844FBA?logo=terraform&logoColor=white)
 ![AWS](https://img.shields.io/badge/AWS-Cloud-FF9900?logo=amazon-aws&logoColor=white)
-![Amazon EKS](https://img.shields.io/badge/Amazon%20EKS-1.35-FF9900?logo=amazoneks&logoColor=white)
-![Amazon ECR](https://img.shields.io/badge/Amazon%20ECR-Registry-FF9900?logo=amazonaws&logoColor=white)
+![VPC](https://img.shields.io/badge/AWS-VPC-FF9900?logo=amazon-aws&logoColor=white)
 
 </div>
 
 ## 📋 Sobre
 
-Este repositório contém o código de **Infraestrutura como Código (IaC)** responsável pelo provisionamento de toda a fundação em nuvem na AWS para a aplicação **Oficina Mecânica**.
+Este repositório contém o código de **Infraestrutura como Código (IaC)** responsável pelo provisionamento de toda a fundação de rede em nuvem na AWS para a aplicação **Oficina Mecânica**.
 
 Faz parte do ecossistema de microsserviços e infraestrutura da pós-graduação em Arquitetura de Software da FIAP (turma 15SOAT, Fase 2).
 
@@ -25,16 +24,6 @@ Faz parte do ecossistema de microsserviços e infraestrutura da pós-graduação
    - **Subnets Privadas (2 AZs em `us-east-1`)**: `10.0.10.0/24` e `10.0.11.0/24` com tags para ELBs internos (`kubernetes.io/role/internal-elb = 1`).
    - **Internet Gateway (IGW)** para saída pública e **NAT Gateway** (alocado com Elastic IP na subnet pública) para saída à internet dos nós privados.
    - Tabelas de roteamento públicas e privadas devidamente associadas.
-
-2. **Cluster Kubernetes Gerenciado (`eks.tf`)**:
-   - **Amazon EKS Cluster** versão `1.35` com endpoint público e privado habilitados.
-   - **Logs do Control Plane**: Ativação de logs de `api`, `audit`, `authenticator`, `controllerManager` e `scheduler` direcionados ao **CloudWatch Log Group** com retenção de 14 dias.
-   - **Security Group**: Control plane com tráfego HTTPS (porta 443) restrito à CIDR da VPC.
-   - **Node Group Gerenciado**: Instâncias `t3.small` alocadas exclusivamente nas subnets privadas.
-
-3. **Registry de Containers (`ecr.tf`)**:
-   - **Amazon Elastic Container Registry (ECR)** para armazenar as imagens Docker da aplicação com varredura de vulnerabilidades (`scan_on_push = true`) e criptografia `AES256`.
-   - **Lifecycle Policy**: Mantém as últimas 20 imagens, descartando builds antigas automaticamente.
 
 ---
 
@@ -50,11 +39,9 @@ Faz parte do ecossistema de microsserviços e infraestrutura da pós-graduação
 │   ├── backend.tf        # Configuração do backend S3 e lock nativo
 │   ├── providers.tf      # Configuração do provider AWS
 │   ├── networking.tf     # VPC, Subnets, IGW, NAT Gateway e Route Tables
-│   ├── eks.tf            # Cluster EKS, Node Group e CloudWatch Logs
-│   ├── ecr.tf            # Repositório de imagens ECR
 │   ├── locals.tf         # Convenções de nomenclatura e tags locais
 │   ├── variables.tf      # Declaração de variáveis de entrada
-│   ├── outputs.tf        # Saídas (cluster_name, endpoint, CA data, etc.)
+│   ├── outputs.tf        # Saídas (vpc_id, vpc_cidr, subnet_ids)
 │   ├── terraform.tfvars  # Valores de variáveis padrão
 │   └── terraform.tfvars.example
 └── .gitignore
@@ -70,7 +57,7 @@ O estado do Terraform é armazenado remotamente em um bucket S3 com criptografia
 - **Chave (Key)**: `infra/prod-simulated/infra-base/terraform.tfstate`
 - **Região**: `us-east-1`
 
-Essas informações de estado são posteriormente consumidas pelo repositório [`oficina-mecanica-k8s`](https://github.com/FIAP-15SOAT/oficina-mecanica-k8s) via `data.terraform_remote_state`.
+Essas informações de estado são posteriormente consumidas pelo repositório [`oficina-mecanica-k8s`](https://github.com/FIAP-15SOAT/oficina-mecanica-k8s) via `data.terraform_remote_state` para criação do cluster EKS nas subnets provisionadas.
 
 ---
 
@@ -83,22 +70,18 @@ Essas informações de estado são posteriormente consumidas pelo repositório [
 | `aws_region` | `string` | `us-east-1` | Região da AWS |
 | `project_name` | `string` | `oficina-mecanica` | Prefixo usado para nomes de recursos e tags |
 | `environment` | `string` | `prod-simulated` | Ambiente de implantação |
-| `kubernetes_version` | `string` | `1.35` | Versão do Kubernetes para o cluster EKS |
 | `vpc_cidr` | `string` | `10.0.0.0/16` | Bloco CIDR da VPC |
 | `public_subnet_cidrs` | `list(string)` | `["10.0.0.0/24", "10.0.1.0/24"]` | CIDRs das subnets públicas (mínimo 2) |
 | `private_subnet_cidrs`| `list(string)` | `["10.0.10.0/24", "10.0.11.0/24"]` | CIDRs das subnets privadas (mínimo 2) |
-| `node_instance_type` | `string` | `t3.small` | Tipo de instância dos nós de trabalho |
 
 ### Saídas Exportadas (Outputs)
 
 | Saída | Descrição |
 |---|---|
-| `cluster_name` | Nome do cluster EKS provisionado (consumido pelo `k8s`) |
-| `cluster_endpoint` | Endpoint do API Server do cluster |
-| `cluster_certificate_authority_data` | Dados da Autoridade Certificadora do cluster em base64 |
 | `vpc_id` | ID da VPC criada |
-| `public_subnet_ids` / `private_subnet_ids` | IDs das subnets públicas e privadas |
-| `zz_next_steps` | Guia com instruções pós-apply para atualizar o kubeconfig |
+| `vpc_cidr` | Bloco CIDR da VPC |
+| `public_subnet_ids` | IDs das subnets públicas |
+| `private_subnet_ids` | IDs das subnets privadas |
 
 ---
 
@@ -125,12 +108,6 @@ terraform plan
 
 # 4. Aplicar o provisionamento
 terraform apply
-```
-
-Ao final do `apply`, conecte seu cliente local `kubectl` ao cluster:
-```bash
-aws eks update-kubeconfig --region us-east-1 --name eks-oficina-mecanica
-kubectl get nodes
 ```
 
 ---
