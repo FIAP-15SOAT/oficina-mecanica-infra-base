@@ -67,7 +67,7 @@ Faz parte do ecossistema de microsserviços e infraestrutura da pós-graduação
 O estado do Terraform é armazenado remotamente em um bucket S3 com criptografia em repouso e suporte ao **lock nativo do S3** (disponível no Terraform ≥ 1.11 via `use_lockfile = true`):
 
 - **Bucket**: `bkt-oficina-mecanica`
-- **Chave (Key)**: `infra/prod-simulated/aws-base/terraform.tfstate`
+- **Chave (Key)**: `infra/prod-simulated/infra-base/terraform.tfstate`
 - **Região**: `us-east-1`
 
 Essas informações de estado são posteriormente consumidas pelo repositório [`oficina-mecanica-k8s`](https://github.com/FIAP-15SOAT/oficina-mecanica-k8s) via `data.terraform_remote_state`.
