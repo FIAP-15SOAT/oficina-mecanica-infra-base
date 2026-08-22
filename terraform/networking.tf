@@ -12,7 +12,7 @@ resource "aws_vpc" "vpc" {
   }
 }
 
-resource "aws_subnet" "subnet_eks_public" {
+resource "aws_subnet" "subnet_oficina_mecanica_public" {
   count = length(local.selected_public_cidrs)
 
   vpc_id                  = aws_vpc.vpc.id
@@ -21,13 +21,13 @@ resource "aws_subnet" "subnet_eks_public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name                                              = "${local.eks_subnet_name}-public-${count.index + 1}"
+    Name                                              = "${local.subnet_name}-public-${count.index + 1}"
     "kubernetes.io/cluster/${local.eks_cluster_name}" = "shared"
     "kubernetes.io/role/elb"                          = "1"
   }
 }
 
-resource "aws_subnet" "subnet_eks_private" {
+resource "aws_subnet" "subnet_oficina_mecanica_private" {
   count = length(local.selected_private_cidrs)
 
   vpc_id            = aws_vpc.vpc.id
@@ -35,7 +35,7 @@ resource "aws_subnet" "subnet_eks_private" {
   availability_zone = local.azs[count.index]
 
   tags = {
-    Name                                              = "${local.eks_subnet_name}-private-${count.index + 1}"
+    Name                                              = "${local.subnet_name}-private-${count.index + 1}"
     "kubernetes.io/cluster/${local.eks_cluster_name}" = "shared"
     "kubernetes.io/role/internal-elb"                 = "1"
   }
@@ -59,7 +59,7 @@ resource "aws_eip" "eip_natgw" {
 
 resource "aws_nat_gateway" "natgw" {
   allocation_id = aws_eip.eip_natgw.id
-  subnet_id     = aws_subnet.subnet_eks_public[0].id
+  subnet_id     = aws_subnet.subnet_oficina_mecanica_public[0].id
 
   tags = {
     Name = "natgw-${var.project_name}"
@@ -82,9 +82,9 @@ resource "aws_route_table" "rt_public" {
 }
 
 resource "aws_route_table_association" "rtassoc_public" {
-  count = length(aws_subnet.subnet_eks_public)
+  count = length(aws_subnet.subnet_oficina_mecanica_public)
 
-  subnet_id      = aws_subnet.subnet_eks_public[count.index].id
+  subnet_id      = aws_subnet.subnet_oficina_mecanica_public[count.index].id
   route_table_id = aws_route_table.rt_public.id
 }
 
@@ -102,8 +102,8 @@ resource "aws_route_table" "rt_private" {
 }
 
 resource "aws_route_table_association" "rtassoc_private" {
-  count = length(aws_subnet.subnet_eks_private)
+  count = length(aws_subnet.subnet_oficina_mecanica_private)
 
-  subnet_id      = aws_subnet.subnet_eks_private[count.index].id
+  subnet_id      = aws_subnet.subnet_oficina_mecanica_private[count.index].id
   route_table_id = aws_route_table.rt_private.id
 }
