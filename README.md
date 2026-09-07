@@ -125,6 +125,10 @@ O repositório conta com pipelines automatizados via GitHub Actions:
 
 ---
 
+## 📐 Decisões Arquiteturais
+
+- [ADR 0001 — Escolha da nuvem (AWS) e criação da infraestrutura de rede base](docs/adr/0001-escolha-de-nuvem-e-infra-base.md)
+
 ## 👥 Autores
 
 - [Guilherme da Rocha Salvador](https://github.com/guilhermesalvador404)
