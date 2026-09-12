@@ -57,7 +57,7 @@ O estado do Terraform é armazenado remotamente em um bucket S3 com criptografia
 - **Chave (Key)**: `infra/prod-simulated/infra-base/terraform.tfstate`
 - **Região**: `us-east-1`
 
-Essas informações de estado são posteriormente consumidas pelo repositório [`oficina-mecanica-k8s`](https://github.com/FIAP-15SOAT/oficina-mecanica-k8s) via `data.terraform_remote_state` para criação do cluster EKS nas subnets provisionadas.
+Essas informações de estado são posteriormente consumidas pelo repositório [`oficina-mecanica-infra-k8s`](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-k8s) via `data.terraform_remote_state` para criação do cluster EKS nas subnets provisionadas.
 
 ---
 

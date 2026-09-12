@@ -6,7 +6,7 @@ Aceito — 2026-09-07
 
 ## Contexto
 
-O projeto Oficina Mecânica precisa hospedar sua API (`oficina-mecanica-app`), banco de dados (`oficina-mecanica-database`) e cluster Kubernetes (`oficina-mecanica-k8s`) em algum provedor de nuvem. Este repositório (`oficina-mecanica-infra-base`) é a camada mais baixa do IaC do projeto: a fundação de rede (VPC, subnets, gateways) sobre a qual todos os demais repositórios de infraestrutura se apoiam via `terraform_remote_state`.
+O projeto Oficina Mecânica precisa hospedar sua API (`oficina-mecanica-api`), banco de dados (`oficina-mecanica-infra-database`) e cluster Kubernetes (`oficina-mecanica-infra-k8s`) em algum provedor de nuvem. Este repositório (`oficina-mecanica-infra-base`) é a camada mais baixa do IaC do projeto: a fundação de rede (VPC, subnets, gateways) sobre a qual todos os demais repositórios de infraestrutura se apoiam via `terraform_remote_state`.
 
 A restrição decisiva do ambiente é o contexto acadêmico: o grupo tem acesso a contas **AWS Academy Learner Lab**, com um orçamento de crédito de laboratório limitado (na ordem de US$50) e sessões de lab com duração e reinícios periódicos. Isso implica duas limitações estruturais que moldam toda decisão de infraestrutura no projeto:
 
@@ -23,7 +23,7 @@ Adotar a **AWS (Amazon Web Services)** como provedor de nuvem único do projeto,
 - Um **Internet Gateway** para saída/entrada pública e um único **NAT Gateway** (com Elastic IP, numa subnet pública) para dar saída à internet aos recursos das subnets privadas (necessário para os nós do EKS puxarem imagens de container e para o RDS aplicar patches).
 - Tabelas de rotas públicas e privadas associadas às subnets correspondentes.
 
-O estado do Terraform é mantido remotamente num bucket S3 (`bkt-oficina-mecanica`, chave `infra/prod-simulated/infra-base/terraform.tfstate`), com lock nativo do S3 (`use_lockfile = true`, Terraform ≥ 1.11) em vez de uma tabela DynamoDB de lock — os outputs (`vpc_id`, `vpc_cidr`, `public_subnet_ids`, `private_subnet_ids`) são consumidos por `oficina-mecanica-k8s` e `oficina-mecanica-database` via `data.terraform_remote_state`.
+O estado do Terraform é mantido remotamente num bucket S3 (`bkt-oficina-mecanica`, chave `infra/prod-simulated/infra-base/terraform.tfstate`), com lock nativo do S3 (`use_lockfile = true`, Terraform ≥ 1.11) em vez de uma tabela DynamoDB de lock — os outputs (`vpc_id`, `vpc_cidr`, `public_subnet_ids`, `private_subnet_ids`) são consumidos por `oficina-mecanica-infra-k8s` e `oficina-mecanica-infra-database` via `data.terraform_remote_state`.
 
 ## Alternativas consideradas
 
@@ -51,7 +51,7 @@ Seria o padrão usual em um projeto AWS real, dando controle total sobre permiss
 
 ### Positivas
 
-- **Fundação de rede reutilizável**: os repositórios `oficina-mecanica-k8s` e `oficina-mecanica-database` consomem esta VPC via remote state, sem duplicar definição de rede — uma única fonte de verdade para CIDRs e subnets.
+- **Fundação de rede reutilizável**: os repositórios `oficina-mecanica-infra-k8s` e `oficina-mecanica-infra-database` consomem esta VPC via remote state, sem duplicar definição de rede — uma única fonte de verdade para CIDRs e subnets.
 - **Isolamento por camada**: recursos que não precisam de exposição pública (EKS nodes, RDS) ficam em subnets privadas, reduzindo superfície de ataque.
 - **Custo controlado**: um único NAT Gateway e ausência de VPC Endpoints mantêm o consumo de crédito de laboratório dentro do orçamento disponível para toda a duração do projeto.
 - **Terraform como fonte única de verdade da rede**, com histórico de mudanças versionado e revisável via PR (CI valida `fmt`, `validate` e `plan` antes de qualquer aplicação).
@@ -69,7 +69,7 @@ Seria o padrão usual em um projeto AWS real, dando controle total sobre permiss
 
 ## Referências
 
-- [`oficina-mecanica-k8s` — README (consumo do remote state desta VPC)](https://github.com/FIAP-15SOAT/oficina-mecanica-k8s)
-- [`oficina-mecanica-database` — README e ADR 0001 (consumo desta VPC pelo RDS)](https://github.com/FIAP-15SOAT/oficina-mecanica-database)
-- [`oficina-mecanica-app` › ADR 0005 — Escolha de nuvem AWS (contexto do laboratório Academy, orçamento e limitações de IAM)](https://github.com/FIAP-15SOAT/oficina-mecanica-app/blob/master/docs/adr/0005-escolha-de-nuvem-aws.md)
+- [`oficina-mecanica-infra-k8s` — README (consumo do remote state desta VPC)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-k8s)
+- [`oficina-mecanica-infra-database` — README e ADR 0001 (consumo desta VPC pelo RDS)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database)
+- [`oficina-mecanica-api` › ADR 0005 — Escolha de nuvem AWS (contexto do laboratório Academy, orçamento e limitações de IAM)](https://github.com/FIAP-15SOAT/oficina-mecanica-api/blob/main/docs/adr/0005-escolha-de-nuvem-aws.md)
 - `terraform/networking.tf`, `terraform/variables.tf`, `terraform/outputs.tf` — configuração corrente da rede.

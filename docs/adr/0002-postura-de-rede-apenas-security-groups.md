@@ -6,7 +6,7 @@ Aceito — 2026-09-07
 
 ## Contexto
 
-A VPC provisionada por este repositório (ADR 0001) define subnets, tabelas de rotas, Internet Gateway e NAT Gateway (`networking.tf`), mas nenhum `aws_network_acl` customizado nem `aws_flow_log`. O controle de tráfego de entrada/saída fica inteiramente a cargo dos **Security Groups** definidos nos repositórios consumidores (`oficina-mecanica-k8s` para o control plane do EKS, `oficina-mecanica-database` para o RDS) — cada um restringindo tráfego por porta e CIDR de origem no nível de instância/ENI, não no nível de subnet.
+A VPC provisionada por este repositório (ADR 0001) define subnets, tabelas de rotas, Internet Gateway e NAT Gateway (`networking.tf`), mas nenhum `aws_network_acl` customizado nem `aws_flow_log`. O controle de tráfego de entrada/saída fica inteiramente a cargo dos **Security Groups** definidos nos repositórios consumidores (`oficina-mecanica-infra-k8s` para o control plane do EKS, `oficina-mecanica-infra-database` para o RDS) — cada um restringindo tráfego por porta e CIDR de origem no nível de instância/ENI, não no nível de subnet.
 
 ## Decisão
 
@@ -43,5 +43,5 @@ Daria visibilidade de auditoria sobre todo o tráfego de rede (aceito/rejeitado,
 
 - [ADR 0001 — Escolha da nuvem e criação da infraestrutura de rede base](0001-escolha-de-nuvem-e-infra-base.md)
 - `terraform/networking.tf` — VPC, subnets, IGW, NAT Gateway, tabelas de rotas (sem NACL nem Flow Log).
-- [`oficina-mecanica-k8s` — Security Group do control plane EKS](https://github.com/FIAP-15SOAT/oficina-mecanica-k8s/blob/main/terraform/eks.tf)
-- [`oficina-mecanica-database` — Security Group do RDS](https://github.com/FIAP-15SOAT/oficina-mecanica-database/blob/main/terraform/security_group.tf)
+- [`oficina-mecanica-infra-k8s` — Security Group do control plane EKS](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-k8s/blob/main/terraform/eks.tf)
+- [`oficina-mecanica-infra-database` — Security Group do RDS](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database/blob/main/terraform/security_group.tf)
