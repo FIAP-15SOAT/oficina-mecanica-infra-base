@@ -6,7 +6,7 @@ Aceito — 2026-09-07
 
 ## Contexto
 
-A VPC provisionada por este repositório (ADR 0001) define subnets, tabelas de rotas, Internet Gateway e NAT Gateway (`networking.tf`), mas nenhum `aws_network_acl` customizado nem `aws_flow_log`. O controle de tráfego de entrada/saída fica inteiramente a cargo dos **Security Groups** definidos nos repositórios consumidores (`oficina-mecanica-infra-k8s` para o control plane do EKS, `oficina-mecanica-infra-database` para o RDS) — cada um restringindo tráfego por porta e CIDR de origem no nível de instância/ENI, não no nível de subnet.
+A VPC provisionada por este repositório (ADR 0001) define subnets, tabelas de rotas, Internet Gateway e NAT Gateway (`networking.tf`), mas nenhum `aws_network_acl` customizado nem `aws_flow_log`. Os **Security Groups** são definidos pelos consumidores: Kubernetes (SG adicional do control plane e regra NodePort no SG gerenciado do EKS), database (RDS), API Gateway (VPC Link) e Lambda (ENIs da função). As regras atuam nas interfaces/recursos, não no nível de subnet. O SG adicional do EKS não limita sozinho seu endpoint público de administração.
 
 ## Decisão
 
