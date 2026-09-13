@@ -10,11 +10,11 @@ A conta AWS Academy Learner Lab não fica disponível 24/7 — a sessão de labo
 
 ## Decisão
 
-Estruturar o job `tf-validate` do CI para **nunca falhar por causa da indisponibilidade do ambiente**, separando o que pode ser validado sem credenciais AWS do que depende delas:
+Estruturar o job `tf-validate` do CI para **tolerar falha no step de configuração de credenciais AWS**, separando os steps estáticos dos que dependem da sessão:
 
-1. `terraform fmt -check`, `terraform init -backend=false` e `terraform validate` rodam sempre — não dependem de credenciais AWS válidas.
+1. `terraform fmt -check -recursive`, `terraform init -backend=false` e `terraform validate` rodam sempre — não dependem de credenciais AWS válidas.
 2. O passo `Configure AWS Credentials` roda com `continue-on-error: true`, registrando o resultado em `steps.aws_creds.outcome`.
-3. `terraform plan` só roda **se** as credenciais funcionaram (`if: steps.aws_creds.outcome == 'success'`).
+3. O step com `terraform init -reconfigure` e `terraform plan` só roda se a configuração de credenciais terminou com sucesso (`if: steps.aws_creds.outcome == 'success'`). Erros de backend, permissões, recursos ou plan após autenticação continuam falhando o job; não há tolerância geral a qualquer falha cloud.
 4. Se as credenciais falharem, um passo dedicado escreve um aviso no job summary do GitHub Actions ("Terraform plan — skipped ⏭️ (...) Isso não bloqueia o CI") em vez de deixar o workflow simplesmente vermelho sem explicação.
 
 ## Alternativas consideradas
@@ -35,7 +35,7 @@ Tentaria mitigar indisponibilidades momentâneas com novas tentativas. Descartad
 
 ### Positivas
 
-- **CI nunca fica vermelho por um motivo fora do controle do autor do PR**: uma sessão de laboratório expirada não é tratada como falha de código.
+- **Falha de configuração de credenciais não torna o CI vermelho**: o plan é ignorado nesse caso, mantendo a validação estática. O sucesso desse step não garante permissões para todos os recursos do plan.
 - **Ainda valida o que é possível sem credenciais** (`fmt`, `validate`), então um erro de sintaxe ou de referência continua sendo pego imediatamente, independente do estado do laboratório.
 - **Comunicação explícita no job summary**: quem revisa o PR entende imediatamente por que o `plan` não rodou, em vez de precisar investigar logs.
 
@@ -46,7 +46,7 @@ Tentaria mitigar indisponibilidades momentâneas com novas tentativas. Descartad
 
 ### Riscos mitigados
 
-- **CI bloqueando desenvolvimento por uma condição de ambiente que ninguém pode controlar no momento do PR**: mitigado por nunca falhar o job por esse motivo, mantendo o restante da validação estática ativa.
+- **Falha de credenciais bloqueando desenvolvimento**: mitigada pelo step tolerante e skip condicional, mantendo fmt/validate. O job combinado inclui um plan cloud quando há autenticação e permanece opcional nos required checks. Separá-lo em jobs static/plan é apenas recomendação.
 
 ## Referências
 
