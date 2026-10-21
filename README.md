@@ -16,7 +16,7 @@ Este repositório contém o código de **Infraestrutura como Código (IaC)** res
 
 Faz parte do ecossistema de serviços e infraestrutura da pós-graduação em Arquitetura de Software da FIAP (turma 15SOAT).
 
-A [API](https://github.com/FIAP-15SOAT/oficina-mecanica-api) é a entrada central da documentação da solução.
+A [API](https://github.com/FIAP-15SOAT/oficina-mecanica-work-order-service) é a entrada central da documentação da solução.
 
 ---
 
