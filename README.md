@@ -70,7 +70,7 @@ Endpoints não são criados por este módulo.
 │   ├── networking.tf  # VPC, AZs, subnets, IGW, NAT, rotas e associações
 │   ├── outputs.tf  # Outputs de integração
 │   ├── providers.tf  # Providers e leitura de remote state quando aplicável
-│   ├── terraform.tfvars  # Configuração versionada do laboratório
+│   ├── terraform.tfvars  # Configuração estável da stack
 │   ├── terraform.tfvars.example  # Referência para configurar o ambiente
 │   └── variables.tf  # Variáveis de entrada
 ├── .gitignore  # Arquivos locais ignorados
