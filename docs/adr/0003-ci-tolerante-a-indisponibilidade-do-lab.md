@@ -14,7 +14,7 @@ Estruturar o job `tf-validate` do CI para **tolerar falha no step de configuraç
 
 1. `terraform fmt -check -recursive`, `terraform init -backend=false` e `terraform validate` rodam sempre — não dependem de credenciais AWS válidas.
 2. O passo `Configure AWS Credentials` roda com `continue-on-error: true`, registrando o resultado em `steps.aws_creds.outcome`.
-3. O step com `terraform init -reconfigure` e `terraform plan` só roda se a configuração de credenciais terminou com sucesso (`if: steps.aws_creds.outcome == 'success'`). Erros de backend, permissões, recursos ou plan após autenticação continuam falhando o job; não há tolerância geral a qualquer falha cloud.
+3. O step com `terraform init -reconfigure -backend-config="bucket=$TF_STATE_BUCKET"` e `terraform plan` só roda se a configuração de credenciais terminou com sucesso (`if: steps.aws_creds.outcome == 'success'`). Erros de backend, permissões, recursos ou plan após autenticação continuam falhando o job; não há tolerância geral a qualquer falha cloud.
 4. Se as credenciais falharem, um passo dedicado escreve um aviso no job summary do GitHub Actions ("Terraform plan — skipped ⏭️ (...) Isso não bloqueia o CI") em vez de deixar o workflow simplesmente vermelho sem explicação.
 
 ## Alternativas consideradas

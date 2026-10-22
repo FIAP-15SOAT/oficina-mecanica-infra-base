@@ -94,7 +94,7 @@ completo no YAML, com a versão correspondente registrada em comentário.
    `steps.aws_creds.outcome` conserva o resultado real para decidir os próximos.
 7. **Terraform Plan Infra AWS**: executa somente se
    `steps.aws_creds.outcome == 'success'`. Primeiro faz
-   `terraform init -reconfigure -no-color` para habilitar o backend remoto;
+   `terraform init -reconfigure -no-color -backend-config="bucket=$TF_STATE_BUCKET"` para habilitar o backend remoto;
    depois `terraform plan -no-color` consulta a AWS e os states necessários e
    mostra as mudanças propostas. Os inputs locais/configuração versionada definem a rede; o workflow não injeta nomes de roles ou senha de banco. Uma falha de init/plan nessa
    condição **falha o job**; a tolerância não cobre erros depois de autenticar.
@@ -144,7 +144,7 @@ manual é avaliado no job inteiro antes desses steps.
 3. **Configure AWS Credentials**: configura os três Secrets temporários e
    `us-east-1`. Aqui **não** há `continue-on-error`; credenciais ausentes ou
    inválidas impedem a inicialização e o apply.
-4. **Terraform Init**: executa `terraform init -no-color` em `terraform/`.
+4. **Terraform Init**: executa `terraform init -no-color -backend-config="bucket=$TF_STATE_BUCKET"` em `terraform/`.
    Instala providers e inicializa o backend S3 configurado para esta stack;
    o bucket precisa existir e ser acessível.
 5. **Terraform Validate**: executa `terraform validate -no-color` antes do
@@ -173,6 +173,7 @@ equipe. Ambos os workflows fixam `AWS_REGION=us-east-1`.
 | Secret | `AWS_ACCESS_KEY_ID` | CI e CD | Access key temporária do laboratório |
 | Secret | `AWS_SECRET_ACCESS_KEY` | CI e CD | Secret key da mesma sessão |
 | Secret | `AWS_SESSION_TOKEN` | CI e CD | Token temporário; deve corresponder às outras duas credenciais |
+| Variable | `TF_STATE_BUCKET` | CI e CD | Nome do bucket de state, em variável para trocá-lo sem editar arquivo versionado; passado ao `terraform init` por `-backend-config`; sem ela, o `init` falha |
 | Variable | `BOT_APP_ID` | CI, `Generate GitHub App Token` | ID do App instalado no repositório |
 | Secret | `BOT_PRIVATE_KEY` | CI, `Generate GitHub App Token` | Chave privada do App |
 | Variable | `ENABLE_DEPLOY` | Condition do job de CD | `true` habilita deploy automático; manual ainda exige `main` |
