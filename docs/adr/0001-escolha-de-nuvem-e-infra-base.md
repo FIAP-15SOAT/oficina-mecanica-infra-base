@@ -23,7 +23,7 @@ Adotar a **AWS (Amazon Web Services)** como provedor de nuvem único do projeto,
 - Um **Internet Gateway** para conectividade pública e um único **NAT Gateway** (com Elastic IP, na primeira subnet pública) para saída dos recursos privados.
 - Tabelas de rotas públicas e privadas associadas às subnets correspondentes.
 
-O estado do Terraform é mantido remotamente no bucket S3 externo `bkt-oficina-mecanica`, chave `infra/prod-simulated/infra-base/terraform.tfstate`, com criptografia e lock nativo (`use_lockfile = true`, Terraform ≥ 1.11). O módulo não cria o bucket nem tabela DynamoDB. Os outputs `vpc_id`, `vpc_cidr`, `public_subnet_ids` e `private_subnet_ids` são consumidos, conforme a necessidade de cada stack, por Kubernetes, database, API Gateway e Lambda via `terraform_remote_state`. Os locals usam somente os primeiros dois CIDRs de cada lista.
+O estado do Terraform é mantido remotamente no bucket S3 externo dado pela variável de Actions da organização `TF_STATE_BUCKET` (backend parcial, com o bucket passado no `terraform init`; o nome de bucket S3 é único em toda a AWS, e o bucket de uma conta do AWS Academy encerrada fica preso nela com o nome, por isso cada conta nova usa um nome novo, trocado só na variável), chave `infra/prod-simulated/infra-base/terraform.tfstate`, com criptografia e lock nativo (`use_lockfile = true`, Terraform ≥ 1.11). O módulo não cria o bucket nem tabela DynamoDB. Os outputs `vpc_id`, `vpc_cidr`, `public_subnet_ids` e `private_subnet_ids` são consumidos, conforme a necessidade de cada stack, por Kubernetes, database, API Gateway e Lambda via `terraform_remote_state`. Os locals usam somente os primeiros dois CIDRs de cada lista.
 
 ## Alternativas consideradas
 

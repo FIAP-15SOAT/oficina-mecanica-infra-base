@@ -84,13 +84,15 @@ Endpoints não são criados por este módulo.
 O estado do Terraform é armazenado remotamente em um bucket S3 com criptografia
 em repouso e suporte ao **lock nativo do S3** (`use_lockfile = true`):
 
-- **Bucket**: `bkt-oficina-mecanica`
+- **Bucket**: o valor da variável de Actions da organização `TF_STATE_BUCKET`
 - **Chave (Key)**: `infra/prod-simulated/infra-base/terraform.tfstate`
 - **Região**: `us-east-1`
 
-O bucket deve existir previamente. A identidade AWS precisa ler/gravar o state
-e criar/remover o lockfile. Bucket e key são identificadores estáveis,
-compartilhados com os consumidores; não são renomeados junto dos repositórios.
+O bucket deve existir previamente. O nome fica em variável para que possa ser
+trocado sem editar arquivo versionado: o `backend.tf` não declara o bucket, e os
+workflows passam `-backend-config="bucket=$TF_STATE_BUCKET"` no `terraform init`. A identidade AWS precisa ler/gravar o state e
+criar/remover o lockfile. A key é um identificador estável, compartilhado com os
+consumidores; não é renomeada junto dos repositórios.
 
 Os outputs são consumidos diretamente via `data.terraform_remote_state`:
 
@@ -138,7 +140,7 @@ O monitoramento consome o state do Gateway, sem leitura direta deste state.
 - **Terraform ≥ 1.11.0**.
 - **AWS provider ≥ 6.46.0 e < 7.0.0**; as versões/checksums instalados ficam em `terraform/.terraform.lock.hcl`.
 - **AWS CLI v2** configurada com as três credenciais temporárias do AWS Academy: access key, secret key e session token (`aws configure`).
-- Acesso ao bucket de state S3 (`bkt-oficina-mecanica`) e permissões para os recursos de rede.
+- Acesso ao bucket de state S3 (o valor de `TF_STATE_BUCKET`) e permissões para os recursos de rede.
 - Valores de `terraform.tfvars` revisados; a referência é `terraform.tfvars.example`. Não substitua um arquivo existente sem revisar seus valores.
 
 ### Passo a Passo
@@ -150,8 +152,9 @@ git clone https://github.com/FIAP-15SOAT/oficina-mecanica-infra-base.git
 # 2. Entrar no diretório que contém a configuração Terraform
 cd oficina-mecanica-infra-base/terraform
 
-# 3. Inicializar os providers e o backend S3 configurado
-terraform init
+# 3. Inicializar os providers e o backend S3, informando o bucket de state
+export TF_STATE_BUCKET=<nome do bucket>
+terraform init -backend-config="bucket=$TF_STATE_BUCKET"
 
 # 4. Verificar a formatação sem modificar arquivos
 terraform fmt -check -recursive
@@ -188,10 +191,25 @@ terraform validate
 A instalação exige acesso ao registry ou a um cache local. Quando já houver
 lockfile e for necessário preservar suas versões/checksums, acrescente
 `-lockfile=readonly` ao `init`. Antes de um plan remoto após essa inicialização,
-use `terraform init -reconfigure` para configurar o backend. `validate` não
+use `terraform init -reconfigure -backend-config="bucket=$TF_STATE_BUCKET"` para configurar o backend. `validate` não
 comprova permissões AWS nem o resultado de um plan.
 
 ### Ordem de provisionamento e encerramento do laboratório
+
+Antes do primeiro CD numa conta AWS nova:
+
+1. Atualize os secrets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `AWS_SESSION_TOKEN` da organização com as credenciais da conta.
+2. Atualize a variável da organização `TF_STATE_BUCKET` (hoje `bkt-oficina-mecanica-<id da conta AWS>`) e as variáveis `EKS_CLUSTER_ROLE_NAME` e `EKS_NODE_ROLE_NAME` do `oficina-mecanica-infra-k8s` com as roles da conta.
+3. Crie o bucket de state, se ele não existir:
+
+```bash
+export TF_STATE_BUCKET=<valor da variável da organização>
+aws s3api create-bucket --bucket "$TF_STATE_BUCKET" --region us-east-1
+aws s3api put-bucket-versioning --bucket "$TF_STATE_BUCKET" --versioning-configuration Status=Enabled
+```
+
+O versionamento permite recuperar um state corrompido; a criptografia e o
+bloqueio de acesso público já vêm ligados em bucket novo.
 
 - Provisione **infra-base primeiro**, antes de Kubernetes e database. O Gateway também depende do Kubernetes; a Lambda depende dos states de rede, banco e Gateway.
 - Remova primeiro os consumidores e workloads dependentes. Mantenha o EKS acessível enquanto seus recursos Helm/Kubernetes forem removidos.
