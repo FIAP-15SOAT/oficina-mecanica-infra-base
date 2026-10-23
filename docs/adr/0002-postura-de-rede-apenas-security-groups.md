@@ -44,4 +44,4 @@ Daria visibilidade de auditoria sobre todo o tráfego de rede (aceito/rejeitado,
 - [ADR 0001 — Escolha da nuvem e criação da infraestrutura de rede base](0001-escolha-de-nuvem-e-infra-base.md)
 - `terraform/networking.tf` — VPC, subnets, IGW, NAT Gateway, tabelas de rotas (sem NACL nem Flow Log).
 - [`oficina-mecanica-infra-k8s` — Security Group do control plane EKS](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-k8s/blob/main/terraform/eks.tf)
-- [`oficina-mecanica-infra-database` — Security Group do RDS](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database/blob/main/terraform/security_group.tf)
+- [`oficina-mecanica-infra-database-work-order` — Security Groups do RDS e ElastiCache](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database-work-order/blob/main/terraform/security_group.tf)

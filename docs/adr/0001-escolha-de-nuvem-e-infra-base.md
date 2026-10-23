@@ -6,7 +6,7 @@ Aceito — 2026-09-07
 
 ## Contexto
 
-O projeto Oficina Mecânica precisa hospedar sua API (`oficina-mecanica-work-order-service`), banco de dados (`oficina-mecanica-infra-database`) e cluster Kubernetes (`oficina-mecanica-infra-k8s`) em algum provedor de nuvem. Este repositório (`oficina-mecanica-infra-base`) é a camada mais baixa do IaC do projeto: a fundação de rede (VPC, subnets, gateways) sobre a qual todos os demais repositórios de infraestrutura se apoiam via `terraform_remote_state`.
+O projeto Oficina Mecânica precisa hospedar sua API (`oficina-mecanica-work-order-service`), banco de dados (`oficina-mecanica-infra-database-work-order`) e cluster Kubernetes (`oficina-mecanica-infra-k8s`) em algum provedor de nuvem. Este repositório (`oficina-mecanica-infra-base`) é a camada mais baixa do IaC do projeto: a fundação de rede (VPC, subnets, gateways) sobre a qual todos os demais repositórios de infraestrutura se apoiam via `terraform_remote_state`.
 
 A restrição decisiva do ambiente é o contexto acadêmico: o grupo tem acesso a contas **AWS Academy Learner Lab**, com um orçamento de crédito de laboratório limitado (na ordem de US$50) e sessões de lab com duração e reinícios periódicos. Isso implica duas limitações estruturais que moldam toda decisão de infraestrutura no projeto:
 
@@ -70,6 +70,6 @@ Seria o padrão usual em um projeto AWS real, dando controle total sobre permiss
 ## Referências
 
 - [`oficina-mecanica-infra-k8s` — README (consumo do remote state desta VPC)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-k8s)
-- [`oficina-mecanica-infra-database` — README e ADR 0001 (consumo desta VPC pelo RDS)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database)
+- [`oficina-mecanica-infra-database-work-order` — README e ADR 0001 (consumo desta VPC pelo RDS e ElastiCache)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database-work-order)
 - [`oficina-mecanica-work-order-service` — Visão de infraestrutura](https://github.com/FIAP-15SOAT/oficina-mecanica-work-order-service/blob/main/docs/infra/overview.md)
 - `terraform/networking.tf`, `terraform/variables.tf`, `terraform/outputs.tf` — configuração corrente da rede.
