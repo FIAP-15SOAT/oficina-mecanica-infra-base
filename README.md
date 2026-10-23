@@ -102,7 +102,7 @@ Os outputs são consumidos diretamente via `data.terraform_remote_state`:
 | Consumidor | Uso |
 | --- | --- |
 | [Infraestrutura Kubernetes](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-k8s) | VPC/CIDR, subnets privadas para nodes/NLB, subnets públicas + privadas associadas ao EKS e `eks_nodes_security_group_id` no Launch Template dos nós |
-| [Infraestrutura de database (Work Order)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database) | VPC, subnets privadas e `eks_nodes_security_group_id` para o RDS PostgreSQL e ElastiCache Redis |
+| [Infraestrutura de database (Work Order)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database-work-order) | VPC, subnets privadas e `eks_nodes_security_group_id` para o RDS PostgreSQL e ElastiCache Valkey |
 | [Infraestrutura de database (Identity)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database-identity) | VPC, subnets privadas e `eks_nodes_security_group_id` para o RDS PostgreSQL |
 | [Infraestrutura de database (Billing)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database-billing) | VPC, subnets privadas e `eks_nodes_security_group_id` para o RDS PostgreSQL |
 | [Infraestrutura de database (Inventory)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database-inventory) | VPC, subnets privadas e `eks_nodes_security_group_id` para o RDS PostgreSQL |
