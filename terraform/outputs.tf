@@ -17,3 +17,8 @@ output "public_subnet_ids" {
   description = "Public subnet IDs"
   value       = aws_subnet.subnet_oficina_mecanica_public[*].id
 }
+
+output "eks_nodes_security_group_id" {
+  description = "Identity security group ID attached to EKS worker nodes"
+  value       = aws_security_group.secgrp_eks_nodes.id
+}

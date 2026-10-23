@@ -107,3 +107,13 @@ resource "aws_route_table_association" "rtassoc_private" {
   subnet_id      = aws_subnet.subnet_oficina_mecanica_private[count.index].id
   route_table_id = aws_route_table.rt_private.id
 }
+
+resource "aws_security_group" "secgrp_eks_nodes" {
+  name        = "secgrp-eks-nodes-${var.project_name}"
+  description = "Identity security group attached to EKS worker nodes"
+  vpc_id      = aws_vpc.vpc.id
+
+  tags = {
+    Name = "secgrp-eks-nodes-${var.project_name}"
+  }
+}
