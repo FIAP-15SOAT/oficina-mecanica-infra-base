@@ -16,7 +16,7 @@ abrir PR (**CI**), ou aplicar a infraestrutura (**CD**). A fonte executável é
 | Workflow | Arquivo | Gatilho | Responsabilidade |
 | --- | --- | --- | --- |
 | CI | `ci.yml` | `push` em `feature/**` e `fix/**` | fmt/init estático/validate; plan quando autenticação AWS estiver disponível; abertura idempotente de PR para `main` |
-| CD | `cd.yml` | `push` em `main` ou `workflow_dispatch` | init/validate/plan/apply da infraestrutura, com gate por branch e variável de deploy |
+| CD | `cd.yml` | `push` em `main` ou `workflow_dispatch` (`action`: `apply` \| `destroy`) | init/validate e `plan`/`apply` (padrão) ou `destroy` da infraestrutura, com gate por branch e variável de deploy |
 
 **Como ler os diagramas:** cada caixa grande é um **job**; seus **steps** estão
 enumerados dentro dela, na ordem do YAML. A seta entre jobs indica `needs`.
@@ -133,9 +133,9 @@ validate ou um plan executado falhar, `open-pr` não roda.
 | --- | --- | --- | --- |
 | `terraform-aws-base` | Terraform Infra AWS | — | `production` |
 
-Existe **um job**, com sete steps sequenciais. Não há jobs separados de plan
+Existe **um job**, com oito steps declarados (sete executados no fluxo de `apply` e seis no fluxo de `destroy`). Não há jobs separados de plan
 e apply nem dependência com um job de CI. O gate por `main`/`ENABLE_DEPLOY`/
-manual é avaliado no job inteiro antes desses steps.
+manual é avaliado no job inteiro antes desses steps. No disparo manual (`workflow_dispatch`), o input opcional `action` (`choice`: `apply` com default `apply`, ou `destroy`) define se o workflow aplica ou destrói a stack.
 
 ### Job `terraform-aws-base` — Terraform Infra AWS
 
@@ -143,24 +143,25 @@ manual é avaliado no job inteiro antes desses steps.
 2. **Setup Terraform**: instala/configura Terraform no runner.
 3. **Configure AWS Credentials**: configura os três Secrets temporários e
    `us-east-1`. Aqui **não** há `continue-on-error`; credenciais ausentes ou
-   inválidas impedem a inicialização e o apply.
+   inválidas impedem a inicialização e o apply/destroy.
 4. **Terraform Init**: executa `terraform init -no-color -backend-config="bucket=$TF_STATE_BUCKET"` em `terraform/`.
    Instala providers e inicializa o backend S3 configurado para esta stack;
    o bucket precisa existir e ser acessível.
 5. **Terraform Validate**: executa `terraform validate -no-color` antes do
-   plan. O CD não inclui um step de fmt; a formatação pertence ao CI.
-6. **Terraform Plan**: executa `terraform plan -no-color`, exibindo as
+   plan ou destroy. O CD não inclui um step de fmt; a formatação pertence ao CI.
+6. **Terraform Plan** (`if: github.event_name != 'workflow_dispatch' || inputs.action != 'destroy'`): executa `terraform plan -no-color`, exibindo as
    alterações para a infraestrutura e consultando as dependências remotas.
    Usa os inputs desta stack para VPC, subnets, IGW, NAT e rotas; não provisiona o bucket de state.
-7. **Terraform Apply**: executa `terraform apply -auto-approve -no-color`.
+7. **Terraform Apply** (`if: github.event_name != 'workflow_dispatch' || inputs.action != 'destroy'`): executa `terraform apply -auto-approve -no-color`.
    Aplica os recursos de rede e publica os outputs consumidos pelos demais repositórios. Não há arquivo de plano salvo por `-out`: o apply calcula
    seu próprio plano, em vez de reaplicar um artifact do step anterior.
+8. **Terraform Destroy** (`if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'`): executa `terraform destroy -auto-approve -no-color` em `terraform/`, removendo a rede base quando acionado manualmente com `action=destroy` (ou pelo `scripts/environment-down.sh`).
 
 Uma falha interrompe a sequência e falha o job. Não há upload de artifact de
-plano, etapa de destroy, migration ou deploy da aplicação nesse workflow.
+plano, migration ou deploy da aplicação nesse workflow.
 `TF_IN_AUTOMATION=true` é definido no CD para o uso automatizado da CLI.
 
-A rede precisa ser aplicada antes dos seus consumidores. No encerramento, ela é removida por último; o procedimento é manual e está no README.
+A rede precisa ser aplicada antes dos seus consumidores. No encerramento, ela é removida por último pelo script `scripts/environment-down.sh` (ver [Runbook](runbook.md)).
 
 ## Secrets e Variables
 

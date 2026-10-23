@@ -12,7 +12,7 @@
 
 ## 📋 Sobre
 
-Este repositório contém o código de **Infraestrutura como Código (IaC)** responsável pelo provisionamento de toda a fundação de rede em nuvem na AWS para a aplicação **Oficina Mecânica**.
+Este repositório contém o código de **Infraestrutura como Código (IaC)** responsável pelo provisionamento da fundação de rede em nuvem na AWS para a aplicação **Oficina Mecânica**, bem como os **scripts de ciclo de vida do ambiente** (`scripts/environment-up.sh` e `scripts/environment-down.sh`) e o [Runbook da Sessão](docs/runbook.md) que orquestram a subida e a derrubada completa de todas as camadas da solução no AWS Academy Learner Lab.
 
 Faz parte do ecossistema de serviços e infraestrutura da pós-graduação em Arquitetura de Software da FIAP (turma 15SOAT).
 
@@ -53,19 +53,26 @@ Endpoints não são criados por este módulo.
 .
 ├── .github/
 │   └── workflows/
-│       ├── cd.yml  # Apply na main, controlado por ENABLE_DEPLOY ou disparo manual
+│       ├── cd.yml  # Apply na main ou apply/destroy via workflow_dispatch (input action)
 │       └── ci.yml  # Valida Terraform e abre PR; plan condicionado a credenciais
 ├── docs/
 │   ├── adr/
 │   │   ├── 0001-escolha-de-nuvem-e-infra-base.md
 │   │   ├── 0002-postura-de-rede-apenas-security-groups.md
 │   │   ├── 0003-ci-tolerante-a-indisponibilidade-do-lab.md
-│   │   └── 0004-security-group-de-identidade-dos-nos-do-eks.md
+│   │   ├── 0004-security-group-de-identidade-dos-nos-do-eks.md
+│   │   └── 0005-ciclo-de-vida-do-ambiente-por-script.md
 │   ├── diagrams/
 │   │   ├── cd-workflow.png  # Job e steps do workflow de CD
 │   │   ├── ci-workflow.png  # Jobs e steps do workflow de CI
+│   │   ├── environment-lifecycle.png  # Camadas de subida e derrubada do ambiente
 │   │   └── infrastructure.png  # Arquitetura do componente
-│   └── ci-cd.md  # Jobs, steps, conditions e diagramas de CI/CD
+│   ├── ci-cd.md  # Jobs, steps, conditions e diagramas de CI/CD
+│   └── runbook.md  # Runbook operacional da sessão no AWS Academy (subida, derrubada e passos manuais)
+├── scripts/
+│   ├── environment-down.sh  # Derruba o ambiente na ordem inversa e audita sobras na conta AWS
+│   ├── environment-layers.sh  # Tabela declarativa das camadas e funções de disparo/espera via gh
+│   └── environment-up.sh  # Sobe todas as camadas na ordem de dependências e valida /health/<contexto>
 ├── terraform/
 │   ├── .terraform.lock.hcl  # Versões e checksums dos providers
 │   ├── backend.tf  # Backend S3 e lock nativo
@@ -204,39 +211,26 @@ comprova permissões AWS nem o resultado de um plan.
 
 ### Ordem de provisionamento e encerramento do laboratório
 
-Antes do primeiro CD numa conta AWS nova:
-
-1. Atualize os secrets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `AWS_SESSION_TOKEN` da organização com as credenciais da conta.
-2. Atualize a variável da organização `TF_STATE_BUCKET` (hoje `bkt-oficina-mecanica-<id da conta AWS>`) e a variável `EKS_CLUSTER_ROLE_NAME` do `oficina-mecanica-infra-k8s` com a role do cluster da conta (os nós usam `LabRole`).
-3. Crie o bucket de state, se ele não existir:
+A subida e a derrubada completa do ambiente `prod-simulated` através dos repositórios da organização `FIAP-15SOAT` são automatizadas pelos scripts em `scripts/` (ver [ADR 0005](docs/adr/0005-ciclo-de-vida-do-ambiente-por-script.md) e o [Runbook da Sessão](docs/runbook.md)):
 
 ```bash
-export TF_STATE_BUCKET=<valor da variável da organização>
-aws s3api create-bucket --bucket "$TF_STATE_BUCKET" --region us-east-1
-aws s3api put-bucket-versioning --bucket "$TF_STATE_BUCKET" --versioning-configuration Status=Enabled
+# 1. Atualizar os secrets da organização com as credenciais temporárias da sessão ativa do AWS Academy
+gh secret set AWS_ACCESS_KEY_ID --org FIAP-15SOAT --body "$AWS_ACCESS_KEY_ID"
+gh secret set AWS_SECRET_ACCESS_KEY --org FIAP-15SOAT --body "$AWS_SECRET_ACCESS_KEY"
+gh secret set AWS_SESSION_TOKEN --org FIAP-15SOAT --body "$AWS_SESSION_TOKEN"
+
+# 2. Subir todas as camadas do ambiente na ordem de dependências (cria o bucket de state se necessário, dispara os CDs por camada, confere GET /health/<contexto> no Gateway e ativa o monitoramento)
+./scripts/environment-up.sh
+
+# 3. Ao final da sessão, pausar o monitoramento, destruir todas as camadas na ordem inversa e auditar que não restaram recursos cobrando na conta AWS
+./scripts/environment-down.sh
 ```
 
-O versionamento permite recuperar um state corrompido; a criptografia e o
-bloqueio de acesso público já vêm ligados em bucket novo.
+O script `scripts/environment-up.sh` cria automaticamente o bucket S3 de state (`TF_STATE_BUCKET`) com versionamento caso ele ainda não exista na conta, sobe sequencialmente a rede base (`infra-base`), a camada de plataforma em paralelo (`infra-k8s`, `infra-messaging` e os 4 repositórios `infra-database*`), os microsserviços, o `api-gateway` (seguido da verificação pública de `/health/work-order`, `/health/identity`, `/health/billing` e `/health/inventory`), as funções Lambda e a ativação do `custom-monitoring` (`ENVIRONMENT_ONLINE=true`).
 
-- Provisione **infra-base primeiro**, antes de Kubernetes e database. O Gateway também depende do Kubernetes; a Lambda depende dos states de rede, banco e Gateway.
-- Remova primeiro os consumidores e workloads dependentes. Mantenha o EKS acessível enquanto seus recursos Helm/Kubernetes forem removidos.
-- Destrua **infra-base por último**, com credenciais válidas:
+O script `scripts/environment-down.sh` pausa os testes sintéticos no Datadog (`ENVIRONMENT_ONLINE=false`), destrói na ordem inversa (Lambdas → API Gateway → plataforma em paralelo → `infra-base` com retentativa automática enquanto ENIs são liberadas) e executa uma conferência final via AWS CLI para garantir que nenhum recurso cobrável permaneça ativo ao encerrar o laboratório. O bucket S3 de state é preservado entre sessões.
 
-```bash
-# Revisar os recursos que serão removidos
-terraform plan -destroy
-
-# Remover a rede após encerrar seus consumidores
-terraform destroy
-```
-
-NAT Gateway, Elastic IP público e tráfego/processamento de rede podem consumir
-crédito enquanto existem. Compartilhar um NAT reduz a quantidade de recursos,
-mas concentra a saída na primeira AZ; duas AZs não tornam esse caminho
-redundante. Encerrar a sessão do lab não comprova a remoção dos recursos. O
-bucket de state é externo à stack e não é destruído por ela. Não há workflow
-de destroy neste repositório.
+Consulte o [Runbook da Sessão](docs/runbook.md) para o procedimento detalhado de conferência de créditos do Lab (V8), configuração do webhook do Mercado Pago, limpeza de cache no ElastiCache for Valkey e resolução de falhas conhecidas.
 
 ---
 
@@ -245,9 +239,9 @@ de destroy neste repositório.
 O repositório conta com dois workflows automatizados via GitHub Actions:
 
 - **CI**: push em `feature/**` e `fix/**`; valida Terraform, faz plan quando a autenticação AWS está disponível e abre PR para `main` com GitHub App.
-- **CD**: push em `main` ou `workflow_dispatch`; executa plan/apply sob `production`, com gate por `main` e `ENABLE_DEPLOY` ou disparo manual. Não há dependência `needs` entre os dois workflows.
+- **CD**: push em `main` ou `workflow_dispatch` (com input `action`: `apply` por padrão ou `destroy`); executa plan/apply ou destroy sob `production`, com gate por `main` e `ENABLE_DEPLOY` ou disparo manual. Não há dependência `needs` entre os dois workflows.
 
-A [documentação de CI/CD](docs/ci-cd.md) explica cada job/step, conditions, autenticação, configuração GitHub e falhas, e **renderiza os diagramas de CI e CD**.
+A [documentação de CI/CD](docs/ci-cd.md) explica cada job/step, conditions, autenticação, configuração GitHub e falhas, e **renderiza os diagramas de CI e CD**. O [Runbook da Sessão](docs/runbook.md) documenta a operação completa do ambiente com os scripts de ciclo de vida.
 
 ---
 
@@ -257,6 +251,7 @@ A [documentação de CI/CD](docs/ci-cd.md) explica cada job/step, conditions, au
 - [ADR 0002 — Controle de tráfego só por Security Groups, sem NACLs nem VPC Flow Logs](docs/adr/0002-postura-de-rede-apenas-security-groups.md)
 - [ADR 0003 — CI tolerante à indisponibilidade do ambiente AWS Academy](docs/adr/0003-ci-tolerante-a-indisponibilidade-do-lab.md)
 - [ADR 0004 — Security group de identidade dos nós do EKS](docs/adr/0004-security-group-de-identidade-dos-nos-do-eks.md)
+- [ADR 0005 — Ciclo de vida do ambiente por script](docs/adr/0005-ciclo-de-vida-do-ambiente-por-script.md)
 
 ## 👥 Autores
 
