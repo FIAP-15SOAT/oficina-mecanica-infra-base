@@ -28,6 +28,7 @@ A [API](https://github.com/FIAP-15SOAT/oficina-mecanica-work-order-service) é a
    - **Subnets Privadas**: `10.0.10.0/24` e `10.0.11.0/24`, nas mesmas duas AZs, sem atribuição automática de IP público e com tags para ELBs internos (`kubernetes.io/role/internal-elb = 1`). Os dois conjuntos também recebem a tag compartilhada do cluster `eks-oficina-mecanica`.
    - **Internet Gateway (IGW)** para a saída das subnets públicas e **um NAT Gateway**, com Elastic IP na primeira subnet pública, para a saída à internet das duas subnets privadas. A criação do NAT depende do IGW.
    - **Tabelas de roteamento**: uma pública, com rota `0.0.0.0/0` para o IGW, e uma privada, com rota `0.0.0.0/0` para o NAT. Cada tabela tem duas associações, uma por subnet do seu conjunto.
+   - **Security Group de identidade dos nós do EKS (`secgrp-eks-nodes-oficina-mecanica`)**: grupo sem regras próprias de entrada ou saída, exportado via `eks_nodes_security_group_id` para ser anexado aos nós do EKS pelo Launch Template do `infra-k8s` e referenciado nas regras de entrada dos bancos de dados (RDS) e cache (ElastiCache) dos serviços (ver [ADR 0004](docs/adr/0004-security-group-de-identidade-dos-nos-do-eks.md)).
 
 Os CIDRs são configuráveis. `locals.tf` seleciona apenas as primeiras duas AZs
 e os primeiros dois CIDRs de cada lista; CIDRs adicionais não criam outras
@@ -35,8 +36,9 @@ subnets. O provider aplica as tags `Project`, `ManagedBy` e `Environment`.
 As tags Kubernetes identificam as subnets para integração, mas não criam
 balanceadores por si mesmas.
 
-Esta stack provisiona a rede compartilhada. EKS, RDS, Lambda, API Gateway e seus
-Security Groups pertencem aos repositórios consumidores. O NLB da API é
+Esta stack provisiona a rede compartilhada e o Security Group de identidade dos
+nós do EKS. EKS, RDS, ElastiCache, Lambda, API Gateway e os Security Groups com
+regras de porta pertencem aos repositórios consumidores. O NLB da API é
 **interno**, nas subnets privadas, e é provisionado pela infraestrutura
 Kubernetes. Bucket de state, roles IAM, NACLs customizadas, Flow Logs e VPC
 Endpoints não são criados por este módulo.
@@ -57,7 +59,8 @@ Endpoints não são criados por este módulo.
 │   ├── adr/
 │   │   ├── 0001-escolha-de-nuvem-e-infra-base.md
 │   │   ├── 0002-postura-de-rede-apenas-security-groups.md
-│   │   └── 0003-ci-tolerante-a-indisponibilidade-do-lab.md
+│   │   ├── 0003-ci-tolerante-a-indisponibilidade-do-lab.md
+│   │   └── 0004-security-group-de-identidade-dos-nos-do-eks.md
 │   ├── diagrams/
 │   │   ├── cd-workflow.png  # Job e steps do workflow de CD
 │   │   ├── ci-workflow.png  # Jobs e steps do workflow de CI
@@ -67,7 +70,7 @@ Endpoints não são criados por este módulo.
 │   ├── .terraform.lock.hcl  # Versões e checksums dos providers
 │   ├── backend.tf  # Backend S3 e lock nativo
 │   ├── locals.tf  # Seleção/convenções locais de recursos
-│   ├── networking.tf  # VPC, AZs, subnets, IGW, NAT, rotas e associações
+│   ├── networking.tf  # VPC, AZs, subnets, IGW, NAT, rotas, associações e SG de identidade dos nós
 │   ├── outputs.tf  # Outputs de integração
 │   ├── providers.tf  # Providers e leitura de remote state quando aplicável
 │   ├── terraform.tfvars  # Configuração estável da stack
@@ -98,10 +101,14 @@ Os outputs são consumidos diretamente via `data.terraform_remote_state`:
 
 | Consumidor | Uso |
 | --- | --- |
-| [Infraestrutura Kubernetes](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-k8s) | VPC/CIDR; subnets privadas para nodes/NLB e públicas + privadas associadas ao EKS |
-| [Infraestrutura de database](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database) | VPC/CIDR e subnets privadas para o RDS |
+| [Infraestrutura Kubernetes](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-k8s) | VPC/CIDR, subnets privadas para nodes/NLB, subnets públicas + privadas associadas ao EKS e `eks_nodes_security_group_id` no Launch Template dos nós |
+| [Infraestrutura de database (Work Order)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database) | VPC, subnets privadas e `eks_nodes_security_group_id` para o RDS PostgreSQL e ElastiCache Redis |
+| [Infraestrutura de database (Identity)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database-identity) | VPC, subnets privadas e `eks_nodes_security_group_id` para o RDS PostgreSQL |
+| [Infraestrutura de database (Billing)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database-billing) | VPC, subnets privadas e `eks_nodes_security_group_id` para o RDS PostgreSQL |
+| [Infraestrutura de database (Inventory)](https://github.com/FIAP-15SOAT/oficina-mecanica-infra-database-inventory) | VPC, subnets privadas e `eks_nodes_security_group_id` para o RDS PostgreSQL |
 | [API Gateway](https://github.com/FIAP-15SOAT/oficina-mecanica-api-gateway) | VPC/CIDR e subnets privadas para o VPC Link |
-| [Lambda de autenticação](https://github.com/FIAP-15SOAT/oficina-mecanica-lambda-customer-auth) | VPC e subnets privadas para a função |
+| [Lambda de autenticação (Customer)](https://github.com/FIAP-15SOAT/oficina-mecanica-lambda-customer-auth) | VPC e subnets privadas para a função |
+| [Lambda de autenticação (Staff)](https://github.com/FIAP-15SOAT/oficina-mecanica-lambda-staff-auth) | VPC e subnets privadas para a função |
 
 O monitoramento consome o state do Gateway, sem leitura direta deste state.
 
@@ -128,8 +135,9 @@ O monitoramento consome o state do Gateway, sem leitura direta deste state.
 | --- | --- | --- |
 | `vpc_id` | ID da VPC criada | VPC para SGs e integrações dos consumidores |
 | `vpc_cidr` | Bloco CIDR da VPC | CIDR usado nas regras de acesso |
-| `private_subnet_ids` | IDs das subnets privadas | Subnets de nodes EKS, RDS, VPC Link e Lambda |
+| `private_subnet_ids` | IDs das subnets privadas | Subnets de nodes EKS, RDS, ElastiCache, VPC Link e Lambdas |
 | `public_subnet_ids` | IDs das subnets públicas | Subnets também associadas ao control plane EKS |
+| `eks_nodes_security_group_id` | ID do Security Group de identidade dos nós do EKS (`secgrp-eks-nodes-oficina-mecanica`) | Anexado aos nós pelo Launch Template do `infra-k8s` e autorizado nos Security Groups de RDS e ElastiCache dos serviços |
 
 ---
 
@@ -199,7 +207,7 @@ comprova permissões AWS nem o resultado de um plan.
 Antes do primeiro CD numa conta AWS nova:
 
 1. Atualize os secrets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `AWS_SESSION_TOKEN` da organização com as credenciais da conta.
-2. Atualize a variável da organização `TF_STATE_BUCKET` (hoje `bkt-oficina-mecanica-<id da conta AWS>`) e as variáveis `EKS_CLUSTER_ROLE_NAME` e `EKS_NODE_ROLE_NAME` do `oficina-mecanica-infra-k8s` com as roles da conta.
+2. Atualize a variável da organização `TF_STATE_BUCKET` (hoje `bkt-oficina-mecanica-<id da conta AWS>`) e a variável `EKS_CLUSTER_ROLE_NAME` do `oficina-mecanica-infra-k8s` com a role do cluster da conta (os nós usam `LabRole`).
 3. Crie o bucket de state, se ele não existir:
 
 ```bash
@@ -248,6 +256,7 @@ A [documentação de CI/CD](docs/ci-cd.md) explica cada job/step, conditions, au
 - [ADR 0001 — Escolha da nuvem (AWS) e criação da infraestrutura de rede base](docs/adr/0001-escolha-de-nuvem-e-infra-base.md)
 - [ADR 0002 — Controle de tráfego só por Security Groups, sem NACLs nem VPC Flow Logs](docs/adr/0002-postura-de-rede-apenas-security-groups.md)
 - [ADR 0003 — CI tolerante à indisponibilidade do ambiente AWS Academy](docs/adr/0003-ci-tolerante-a-indisponibilidade-do-lab.md)
+- [ADR 0004 — Security group de identidade dos nós do EKS](docs/adr/0004-security-group-de-identidade-dos-nos-do-eks.md)
 
 ## 👥 Autores
 
