@@ -32,7 +32,7 @@ LAYER_2_DATA_AND_PLATFORM=(
 LAYER_3_SERVICES=(
   "oficina-mecanica-work-order-service:cd.yml:false"
   # "oficina-mecanica-identity-service:cd.yml:false"
-  # "oficina-mecanica-billing-service:cd.yml:false"
+  "oficina-mecanica-billing-service:cd.yml:false"
   # "oficina-mecanica-inventory-service:cd.yml:false"
 )
 
