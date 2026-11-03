@@ -42,10 +42,9 @@ LAYER_4_GATEWAY=(
 )
 
 # Layer 5: Serverless functions (Lambda customer-auth and Lambda notification)
-# oficina-mecanica-lambda-notification is uncommented when C-10 lands.
 LAYER_5_LAMBDAS=(
   "oficina-mecanica-lambda-customer-auth:cd.yml:true"
-  # "oficina-mecanica-lambda-notification:cd.yml:true"
+  "oficina-mecanica-lambda-notification:cd.yml:true"
 )
 
 # Layer 6: External observability and synthetic monitoring (Datadog)
