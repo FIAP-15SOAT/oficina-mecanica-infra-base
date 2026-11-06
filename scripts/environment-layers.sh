@@ -28,10 +28,9 @@ LAYER_2_DATA_AND_PLATFORM=(
 )
 
 # Layer 3: Microservices CD pipelines (database migrations, seed, and Kubernetes deployment)
-# New service repositories are uncommented as their bootstrap changes (C-14, C-17, C-21) land.
 LAYER_3_SERVICES=(
   "oficina-mecanica-work-order-service:cd.yml:false"
-  # "oficina-mecanica-identity-service:cd.yml:false"
+  "oficina-mecanica-identity-service:cd.yml:false"
   "oficina-mecanica-billing-service:cd.yml:false"
   "oficina-mecanica-inventory-service:cd.yml:false"
 )
