@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034 # layer arrays and repo names are read by the scripts that source this file
 # Shared layer definitions and GitHub Actions workflow helpers for
 # provisioning (environment-up.sh) and tearing down (environment-down.sh)
 # the prod-simulated environment in the AWS Academy Learner Lab.
@@ -10,7 +11,6 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 INFRA_BASE_REPO="oficina-mecanica-infra-base"
 CUSTOM_MONITORING_REPO="oficina-mecanica-custom-monitoring"
 
-# shellcheck disable=SC2034
 # Each entry follows the format: "<repo>:<workflow_file>:<accepts_action_input>"
 # Layer 1: Base network (VPC, subnets, NAT Gateway, route tables)
 LAYER_1_INFRA_BASE=(
