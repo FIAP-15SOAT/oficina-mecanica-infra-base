@@ -48,17 +48,17 @@ export AWS_DEFAULT_REGION="us-east-1"
 aws sts get-caller-identity
 ```
 
-3. Atualize os três secrets de Actions no escopo da organização `FIAP-15SOAT` usando o GitHub CLI:
+3. Atualize os três secrets de Actions no escopo da organização `FIAP-15SOAT` usando o GitHub CLI. Mantenha o `--visibility all`: sem ele, o `gh` grava o secret como `private`, visível só aos repositórios privados, e os workflows dos repositórios públicos da organização deixam de recebê-lo:
 
 ```bash
 # Atualizar AWS_ACCESS_KEY_ID nos secrets da organização
-gh secret set AWS_ACCESS_KEY_ID --org FIAP-15SOAT --body "$AWS_ACCESS_KEY_ID"
+gh secret set AWS_ACCESS_KEY_ID --org FIAP-15SOAT --visibility all --body "$AWS_ACCESS_KEY_ID"
 
 # Atualizar AWS_SECRET_ACCESS_KEY nos secrets da organização
-gh secret set AWS_SECRET_ACCESS_KEY --org FIAP-15SOAT --body "$AWS_SECRET_ACCESS_KEY"
+gh secret set AWS_SECRET_ACCESS_KEY --org FIAP-15SOAT --visibility all --body "$AWS_SECRET_ACCESS_KEY"
 
 # Atualizar AWS_SESSION_TOKEN nos secrets da organização
-gh secret set AWS_SESSION_TOKEN --org FIAP-15SOAT --body "$AWS_SESSION_TOKEN"
+gh secret set AWS_SESSION_TOKEN --org FIAP-15SOAT --visibility all --body "$AWS_SESSION_TOKEN"
 ```
 
 > **Nota sobre conta AWS nova:** se o ID da conta AWS (`Account` retornado por `aws sts get-caller-identity`) tiver mudado em relação à última sessão, atualize também a variável da organização `TF_STATE_BUCKET` (`gh variable set TF_STATE_BUCKET --org FIAP-15SOAT --body "bkt-oficina-mecanica-<account_id>"`). O script `environment-up.sh` criará o bucket S3 automaticamente com versionamento habilitado se ele ainda não existir na conta.
@@ -209,7 +209,36 @@ Ao encerrar o trabalho na sessão — e **enquanto as credenciais do AWS Academy
       --output table
     ```
 
-### 8.4. Criação do ElastiCache negada pelas políticas da conta do AWS Academy
+### 8.4. Derrubada interrompida depois da destruição do API Gateway
+
+- **Sintoma:** ao executar de novo o `./scripts/environment-down.sh` depois de uma derrubada que parou no meio (credencial expirada, máquina reiniciada), o primeiro passo falha: o CD do `oficina-mecanica-custom-monitoring` termina no `terraform plan` com `Error: Unsupported attribute` em `locals.tf`, dizendo que `data.terraform_remote_state.gateway.outputs` não tem o atributo `api_endpoint`.
+- **Causa:** o teste sintético do Datadog (a verificação externa que chama a rota de saúde pública) monta a URL a partir do `api_endpoint` gravado no state do Terraform do `oficina-mecanica-api-gateway`, mesmo quando está pausado. Depois que a Camada 4 destrói o gateway, esse state fica sem outputs, e o passo 1 da derrubada não roda mais. O monitoramento já ficou silencioso na primeira execução, então só falta destruir o que sobrou.
+- **Como resolver:**
+  1. Confirme que o monitoramento já está silencioso: `gh variable list -R FIAP-15SOAT/oficina-mecanica-custom-monitoring` mostra `ENVIRONMENT_ONLINE=false`, e a execução anterior do CD dele, disparada pelo script, terminou com sucesso.
+  2. Confirme que as Camadas 5 e 4 já foram destruídas: `aws lambda list-functions` e `aws apigatewayv2 get-apis` não listam nenhum recurso `oficina-mecanica`. Se ainda houver algum, destrua-o primeiro com `gh workflow run cd.yml -R FIAP-15SOAT/<repositório> --ref main -f action=destroy`.
+  3. Destrua as Camadas 2 e 1 com as funções do próprio script, a partir da raiz deste repositório:
+     ```bash
+     # Destruir a plataforma e a rede base sem repetir o passo do monitoramento
+     (
+       source scripts/environment-layers.sh
+       require_prerequisites
+       run_layer "Layer 2 - Kubernetes, Messaging & Databases" "destroy" "${LAYER_2_DATA_AND_PLATFORM[@]}"
+       run_layer "Layer 1 - Base Network" "destroy" "${LAYER_1_INFRA_BASE[@]}"
+     )
+     ```
+     Se a Camada 1 falhar com `DependencyViolation`, aguarde alguns minutos e repita só a última linha (ver 8.3).
+  4. Confira que não restou nada cobrando na conta (cada comando deve voltar vazio):
+     ```bash
+     aws eks list-clusters --query clusters --output text
+     aws rds describe-db-instances --query 'DBInstances[].DBInstanceIdentifier' --output text
+     aws elasticache describe-replication-groups --query 'ReplicationGroups[].ReplicationGroupId' --output text
+     aws ec2 describe-nat-gateways --filter Name=state,Values=available,pending --query 'NatGateways[].NatGatewayId' --output text
+     aws elbv2 describe-load-balancers --query 'LoadBalancers[].LoadBalancerName' --output text
+     aws sqs list-queues --queue-name-prefix oficina --output text
+     aws sns list-topics --output text | grep oficina
+     ```
+
+### 8.5. Criação do ElastiCache negada pelas políticas da conta do AWS Academy
 
 - **Sintoma:** o workflow de CD do `oficina-mecanica-infra-database-work-order` (ou de outro repositório que provisione cache gerenciado) falha no `terraform apply` com erro `AccessDenied` ou restrição de IAM em `elasticache:CreateReplicationGroup`.
 - **Causa:** determinadas contas ou revisões de política do AWS Academy Learner Lab podem restringir a criação de replication groups do Amazon ElastiCache ou tipos de nó específicos.
