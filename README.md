@@ -264,3 +264,4 @@ A [documentação de CI/CD](docs/ci-cd.md) explica cada job/step, conditions, au
 
 Projeto acadêmico (FIAP — 15SOAT), para fins educacionais. Sem licença aberta declarada (`UNLICENSED`).
 
+
