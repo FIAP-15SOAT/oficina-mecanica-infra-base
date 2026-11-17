@@ -1,6 +1,6 @@
 # Runbook da Sessão — Ambiente `prod-simulated` (AWS Academy)
 
-Este runbook descreve o procedimento operacional completo para iniciar, operar e encerrar uma sessão do ambiente `prod-simulated` da solução **Oficina Mecânica** no AWS Academy Learner Lab, cobrindo tanto a automação de subida e derrubada por script quanto os passos manuais previstos na arquitetura (AD-26, §8.6, §13.3, §22 e V8 da §25).
+Este runbook descreve o procedimento operacional completo para iniciar, operar e encerrar uma sessão do ambiente `prod-simulated` da solução **Oficina Mecânica** no AWS Academy Learner Lab, cobrindo tanto a automação de subida e derrubada por script quanto os passos manuais: conferência do crédito, atualização das credenciais, atualização da URL do webhook do Mercado Pago e limpeza do cache de um serviço.
 
 ---
 
@@ -15,7 +15,7 @@ Antes de iniciar a sessão, confirme que as ferramentas abaixo estão instaladas
 
 ---
 
-## 2. Conferência de crédito no painel do AWS Academy (Checklist V8)
+## 2. Conferência de crédito no painel do AWS Academy
 
 O AWS Academy Learner Lab fornece um orçamento limitado em dólares (USD) para todo o período da disciplina. Recursos como **EKS Control Plane**, **NAT Gateway**, **nós EC2**, **RDS PostgreSQL** e **ElastiCache for Valkey** consomem crédito continuamente enquanto permanecem provisionados.
 
@@ -93,7 +93,7 @@ Com as credenciais válidas tanto no shell local quanto nos secrets da organiza�
 
 ---
 
-## 5. Atualização da URL do webhook no painel do Mercado Pago (§13.3)
+## 5. Atualização da URL do webhook no painel do Mercado Pago
 
 Como o HTTP API Gateway (`oficina-mecanica-api-gateway`) é destruído ao fim de cada sessão e recriado na sessão seguinte, o domínio público gerado pela AWS (`https://<api_id>.execute-api.us-east-1.amazonaws.com`) muda a cada bootstrap. Quando a sessão envolver testes reais ou simulados de pagamento via Mercado Pago:
 
@@ -120,33 +120,26 @@ aws s3 cp "s3://${TF_STATE_BUCKET}/infra/prod-simulated/api-gateway/terraform.tf
 
 ---
 
-## 6. Limpeza do cache de um serviço no ElastiCache for Valkey (§8.6)
+## 6. Limpeza do cache de um serviço no ElastiCache for Valkey
 
-Durante sessões de depuração, demonstração ou ajustes manuais diretamente no banco de dados PostgreSQL de um serviço, pode ser necessário invalidar as chaves cacheadas daquele contexto no **ElastiCache for Valkey** sem afetar outros contextos nem destruir o cluster de cache.
+Depois de uma alteração manual no banco PostgreSQL de um serviço, as leituras por id podem devolver o valor antigo guardado no cache (o **ElastiCache for Valkey**, compatível com Redis) até a chave expirar, em até 12 horas. Para não esperar, apague só as chaves daquele serviço, sem afetar os outros nem destruir o cache.
 
-Como o ElastiCache fica isolado nas subnets privadas e aceita tráfego apenas a partir do Security Group de identidade dos nós do EKS (`secgrp-eks-nodes-oficina-mecanica`), execute a limpeza a partir de um pod do próprio serviço:
-
-1. Atualize o contexto local do `kubectl` apontando para o cluster EKS da sessão:
+O ElastiCache fica nas subnets privadas e só aceita tráfego do Security Group dos nós do EKS (`secgrp-eks-nodes-oficina-mecanica`). A imagem dos serviços não traz cliente Valkey, então a limpeza roda num pod efêmero com a imagem `valkey/valkey:9.1-alpine`, removido ao terminar, no namespace do serviço. As chaves de cada serviço começam pelo nome dele (`work-order:`, `identity:`, `billing:` e `inventory:`), que também é o nome do namespace e o sufixo do cache:
 
 ```bash
 # Configurar o kubeconfig local para o cluster eks-oficina-mecanica
 aws eks update-kubeconfig --name eks-oficina-mecanica --region us-east-1
-```
 
-2. Execute o `redis-cli --tls` com `--scan --pattern '<contexto>:*'` dentro do deployment do serviço para remover apenas as chaves pertencentes àquele prefixo:
+# Serviço cujo cache será limpo: work-order, identity, billing ou inventory
+CONTEXT=work-order
 
-```bash
-# Limpar todas as chaves do contexto work-order no ElastiCache for Valkey via TLS
-kubectl exec -n work-order deploy/work-order-service -- sh -c \
-  'redis-cli --tls -u "$REDIS_URL" --scan --pattern "work-order:*" | xargs -r redis-cli --tls -u "$REDIS_URL" DEL'
-```
+# Endereço do cache e token de acesso do serviço
+CACHE_HOST=$(aws elasticache describe-replication-groups   --replication-group-id "cache-oficina-mecanica-$CONTEXT"   --query 'ReplicationGroups[0].NodeGroups[0].PrimaryEndpoint.Address' --output text)
 
-Caso o container do serviço exponha o host, a porta e o token em variáveis separadas (`REDIS_HOST`, `REDIS_PORT`, `REDIS_AUTH_TOKEN`) em vez de `REDIS_URL`, utilize:
+CACHE_TOKEN=$(aws secretsmanager get-secret-value   --secret-id "cache-oficina-mecanica-$CONTEXT-auth-token"   --query 'SecretString' --output text)
 
-```bash
-# Alternativa usando variáveis separadas de host, porta e autenticação TLS
-kubectl exec -n work-order deploy/work-order-service -- sh -c \
-  'REDISCLI_AUTH="$REDIS_AUTH_TOKEN" redis-cli --tls -h "$REDIS_HOST" -p "${REDIS_PORT:-6379}" --scan --pattern "work-order:*" | xargs -r env REDISCLI_AUTH="$REDIS_AUTH_TOKEN" redis-cli --tls -h "$REDIS_HOST" -p "${REDIS_PORT:-6379}" DEL'
+# Apagar, com TLS e senha, só as chaves com o prefixo do serviço
+kubectl run valkey-flush --rm -i --restart=Never -n "$CONTEXT"   --image=valkey/valkey:9.1-alpine   --env="CACHE_HOST=$CACHE_HOST"   --env="CACHE_TOKEN=$CACHE_TOKEN"   --env="CONTEXT=$CONTEXT"   -- sh -c 'valkey-cli --tls -h "$CACHE_HOST" -p 6379 -a "$CACHE_TOKEN" --no-auth-warning --scan --pattern "$CONTEXT:*" | xargs -r valkey-cli --tls -h "$CACHE_HOST" -p 6379 -a "$CACHE_TOKEN" --no-auth-warning DEL'
 ```
 
 ---
@@ -237,11 +230,3 @@ Ao encerrar o trabalho na sessão — e **enquanto as credenciais do AWS Academy
      aws sqs list-queues --queue-name-prefix oficina --output text
      aws sns list-topics --output text | grep oficina
      ```
-
-### 8.5. Criação do ElastiCache negada pelas políticas da conta do AWS Academy
-
-- **Sintoma:** o workflow de CD do `oficina-mecanica-infra-database-work-order` (ou de outro repositório que provisione cache gerenciado) falha no `terraform apply` com erro `AccessDenied` ou restrição de IAM em `elasticache:CreateReplicationGroup`.
-- **Causa:** determinadas contas ou revisões de política do AWS Academy Learner Lab podem restringir a criação de replication groups do Amazon ElastiCache ou tipos de nó específicos.
-- **Como resolver:**
-  - Verifique primeiro se o `node_type` está configurado como `cache.t3.micro` e `num_cache_clusters = 1`.
-  - Se o serviço `elasticache` estiver bloqueado pela política da conta do laboratório, aplique a contingência prevista na arquitetura (§8.6): implante uma instância efêmera do **Valkey** (`valkey/valkey:8.0-alpine`) como Deployment e ClusterIP Service dentro do próprio namespace do serviço no EKS e aponte a variável de conexão `REDIS_HOST` / `REDIS_URL` do microsserviço para o Service local do cluster.
